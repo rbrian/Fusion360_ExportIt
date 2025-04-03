@@ -61,7 +61,6 @@ def createDefaultConfiguration():
     defaultConfiguration[CONF_FILENAME_ADD_PROJECT_NAME_KEY] = CONF_FILENAME_ADD_PROJECT_NAME_DEFAULT
     defaultConfiguration[CONF_FILENAME_ADD_DESIGN_NAME_KEY] = CONF_FILENAME_ADD_DESIGN_NAME_DEFAULT
     defaultConfiguration[CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY] = CONF_FILENAME_ADD_CONFIGURATION_NAME_DEFAULT
-    defaultConfiguration[CONF_FILENAME_LOOP_CONFIGURATIONS_KEY] = CONF_FILENAME_LOOP_CONFIGURATIONS_DEFAULT
     defaultConfiguration[CONF_FILENAME_REMOVE_VERSION_TAGS_KEY] = CONF_FILENAME_REMOVE_VERSION_TAGS_DEFAULT
     defaultConfiguration[CONF_FILENAME_OCCURRENCE_ID_SEPERATOR_KEY] = CONF_FILENAME_OCCURRENCE_ID_SEPERATOR_DEFAULT
     defaultConfiguration[CONF_FILENAME_ELEMENT_SEPERATOR_KEY] = CONF_FILENAME_ELEMENT_SEPERATOR_DEFAULT
@@ -184,6 +183,11 @@ def initializeUi(inputs :adsk.core.CommandInputs, configurationOnly, checkForUpd
 
     addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_ADD_PROJECT_NAME_KEY, UI_FILENAME_ADD_PROJECT_NAME_NAME, getConfiguration(CONF_FILENAME_ADD_PROJECT_NAME_KEY))
     addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_ADD_DESIGN_NAME_KEY, UI_FILENAME_ADD_DESIGN_NAME_NAME, getConfiguration(CONF_FILENAME_ADD_DESIGN_NAME_KEY))
+
+    if AppObjects().design.isConfiguredDesign:
+        addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY,
+                            UI_FILENAME_ADD_CONFIGURATION_NAME, getConfiguration(CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY))
+
     addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_REMOVE_VERSION_TAGS_KEY, UI_FILENAME_REMOVE_VERSION_TAGS_NAME, getConfiguration(CONF_FILENAME_REMOVE_VERSION_TAGS_KEY))
     addTextListDropDown(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_ELEMENT_SEPERATOR_KEY, UI_FILENAME_ELEMENT_SEPERATOR_NAME, UI_FILENAME_ELEMENT_SEPERATOR_VALUES, getConfiguration(CONF_FILENAME_ELEMENT_SEPERATOR_KEY))
     addTextListDropDown(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_OCCURRENCE_ID_SEPERATOR_KEY, UI_FILENAME_OCCURRENCE_ID_SEPERATOR_NAME, UI_FILENAME_OCCURRENCE_ID_SEPERATOR_VALUES, getConfiguration(CONF_FILENAME_OCCURRENCE_ID_SEPERATOR_KEY))
@@ -191,13 +195,6 @@ def initializeUi(inputs :adsk.core.CommandInputs, configurationOnly, checkForUpd
     addTextListDropDown(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_REPLACE_SPACES_WITH_KEY, UI_FILENAME_REPLACE_SPACES_WITH_NAME, UI_FILENAME_REPLACE_SPACES_WITH_VALUES, getConfiguration(CONF_FILENAME_REPLACE_SPACES_WITH_KEY))
     
     addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_USE_PART_NUMBER_KEY, UI_FILENAME_USE_PART_NUMBER_NAME, getConfiguration(CONF_FILENAME_USE_PART_NUMBER_KEY))
-
-    if AppObjects().design.isConfiguredDesign:
-        addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY,
-                            UI_FILENAME_ADD_CONFIGURATION_NAME, getConfiguration(CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY))
-        addBoolInputToGroup(UI_FILENAME_OPTIONS_GROUP_ID, CONF_FILENAME_LOOP_CONFIGURATIONS_KEY,
-                            UI_FILENAME_LOOP_CONFIGURATIONS, getConfiguration(CONF_FILENAME_LOOP_CONFIGURATIONS_KEY))
-
 
     # location
     if configurationOnly or checkForUpdates:
@@ -1472,20 +1469,11 @@ class ExportItExportDesignCommand(apper.Fusion360CommandBase):
             activeDocument = ao.app.activeDocument
             projectName = activeDocument.dataFile.parentProject.name
 
-            configList = []
-            originalConfig = None
             if ao.design.isConfiguredDesign:
-                if getConfiguration(CONF_FILENAME_LOOP_CONFIGURATIONS_KEY):
-                    originalConfig = ao.design.configurationTopTable.activeRow
-                    for x in range(ao.design.configurationTopTable.rows.count):
-                        row = ao.design.configurationTopTable.rows.item(x)
-                        configList.append({'name': row.name, 'row': row})
-                else:
-                    row = ao.design.configurationTopTable.activeRow
-                    configList.append({'name': row.name, 'row': row})
+                configurationName = ao.design.configurationTopTable.activeRow.name
             else:
-                configList.append({'name': None, 'row': None})
-
+                configurationName = None
+ 
             logger.info("--------------------------------------------------------------------------------")
             logger.info("Starting processing of %s - %s", projectName, designName)
             logger.info("--------------------------------------------------------------------------------")
@@ -1528,86 +1516,79 @@ class ExportItExportDesignCommand(apper.Fusion360CommandBase):
             except:
                 pass
 
-            for configItem in configList:
-                if configItem['row'] != None:
-                    configItem['row'].activate()
-                configurationName = configItem['name']
+            tmpExportObjects = []
 
-                tmpExportObjects = []
+            if not progressDialog.wasCancelled and UI_EXPORT_TYPES_F3D_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
+                # export design as one step file
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_F3D_STRUCTURE_KEY):
+                    exportF3dAsOneFile(projectName, designName, configurationName, rootComponent, ao)
 
-                if not progressDialog.wasCancelled and UI_EXPORT_TYPES_F3D_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
-                    # export design as one step file
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_F3D_STRUCTURE_KEY):
-                        exportF3dAsOneFile(projectName, designName, configurationName, rootComponent, ao)
+                # export each component as individual step files
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_COMPONENT_VALUE in getConfiguration(CONF_F3D_STRUCTURE_KEY):
+                    exportF3dAsOneFilePerComponent(exportObjects, projectName, designName, configurationName, ao)
 
-                    # export each component as individual step files
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_COMPONENT_VALUE in getConfiguration(CONF_F3D_STRUCTURE_KEY):
-                        exportF3dAsOneFilePerComponent(exportObjects, projectName, designName, configurationName, ao)
+            if  not progressDialog.wasCancelled and UI_EXPORT_TYPES_STEP_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
+                # export design as one step file
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_STEP_STRUCTURE_KEY):
+                    exportStepAsOneFile(projectName, designName, configurationName,
+                                        rootComponent, exportObjects, ao)
 
-                if  not progressDialog.wasCancelled and UI_EXPORT_TYPES_STEP_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
-                    # export design as one step file
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_STEP_STRUCTURE_KEY):
-                        exportStepAsOneFile(projectName, designName, configurationName,
-                                            rootComponent, exportObjects, ao)
+                # export each component as individual step files
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_COMPONENT_VALUE in getConfiguration(CONF_STEP_STRUCTURE_KEY):
+                    exportStepAsOneFilePerComponent(exportObjects, projectName, designName, configurationName, ao)
 
-                    # export each component as individual step files
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_COMPONENT_VALUE in getConfiguration(CONF_STEP_STRUCTURE_KEY):
-                        exportStepAsOneFilePerComponent(exportObjects, projectName, designName, configurationName, ao)
+            if not progressDialog.wasCancelled and UI_EXPORT_TYPES_STL_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
+                # export design as one stl file
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
+                    exportStlAsOneFile(projectName, designName, configurationName, rootComponent, exportObjects, ao)
 
-                if not progressDialog.wasCancelled and UI_EXPORT_TYPES_STL_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
-                    # export design as one stl file
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
-                        exportStlAsOneFile(projectName, designName, configurationName, rootComponent, exportObjects, ao)
+                # export each body in component as individual stl files
+                if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_COMPONENT_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
+                    exportStlAsOneFilePerBodyInComponent(
+                        exportObjects, projectName, designName, configurationName, ao)
 
-                    # export each body in component as individual stl files
-                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_COMPONENT_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
-                        exportStlAsOneFilePerBodyInComponent(
-                            exportObjects, projectName, designName, configurationName, ao)
+                if not progressDialog.wasCancelled and (UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY)
+                    or UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY)):
+                    # copy exportObjects into a temporary document and convert all occurrences into unique components.
+                    tmpDocument, tmpRootComponent = copyDesignToExportDocument(exportObjects)
 
-                    if not progressDialog.wasCancelled and (UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY)
-                        or UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY)):
+                    # regenerate list of export objects based
+                    tmpExportObjects = getExportObjects(tmpRootComponent, [], False)
+
+                    # export each body in occurrence as individual stl files
+                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
+                        exportStlAsOneFilePerBodyInOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
+
+                    # export each top level occurrence as individual stl files
+                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
+                        exportStlAsOneFilePerTopOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
+
+            if not progressDialog.wasCancelled and UI_EXPORT_TYPES_3MF_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
+                # export design as one 3mf file
+                if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
+                    export3mfAsOneFile(projectName, designName, configurationName, rootComponent, exportObjects, ao)
+
+                # export each body in component as individual 3mf files
+                if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_COMPONENT_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
+                    export3mfAsOneFilePerBodyInComponent(exportObjects, projectName, designName, configurationName, ao)
+
+                if not progressDialog.wasCancelled and (UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY)
+                    or UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY)):
+
+                    if not tmpExportObjects:
                         # copy exportObjects into a temporary document and convert all occurrences into unique components.
                         tmpDocument, tmpRootComponent = copyDesignToExportDocument(exportObjects)
 
                         # regenerate list of export objects based
                         tmpExportObjects = getExportObjects(tmpRootComponent, [], False)
 
-                        # export each body in occurrence as individual stl files
-                        if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
-                            exportStlAsOneFilePerBodyInOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
+                    # export each body in occurrence as individual 3mf files
+                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
+                        export3mfAsOneFilePerBodyInOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
 
-                        # export each top level occurrence as individual stl files
-                        if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_STL_STRUCTURE_KEY):
-                            exportStlAsOneFilePerTopOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
-
-                if not progressDialog.wasCancelled and UI_EXPORT_TYPES_3MF_VALUE in getConfiguration(CONF_EXPORT_OPTIONS_TYPE_KEY):
-                    # export design as one 3mf file
-                    if  not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
-                        export3mfAsOneFile(projectName, designName, configurationName, rootComponent, exportObjects, ao)
-
-                    # export each body in component as individual 3mf files
-                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_COMPONENT_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
-                        export3mfAsOneFilePerBodyInComponent(exportObjects, projectName, designName, configurationName, ao)
-
-                    if not progressDialog.wasCancelled and (UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY)
-                        or UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY)):
-
-                        if not tmpExportObjects:
-                            # copy exportObjects into a temporary document and convert all occurrences into unique components.
-                            tmpDocument, tmpRootComponent = copyDesignToExportDocument(exportObjects)
-
-                            # regenerate list of export objects based
-                            tmpExportObjects = getExportObjects(tmpRootComponent, [], False)
-
-                        # export each body in occurrence as individual 3mf files
-                        if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_BODY_IN_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
-                            export3mfAsOneFilePerBodyInOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
-
-                        # export each top level occurrence as individual 3mf files
-                        if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
-                            export3mfAsOneFilePerTopOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
-            if originalConfig != None:
-                originalConfig.activate()
+                    # export each top level occurrence as individual 3mf files
+                    if not progressDialog.wasCancelled and UI_STRUCTURE_ONE_FILE_PER_TOP_LEVEL_OCCURRENCE_VALUE in getConfiguration(CONF_3MF_STRUCTURE_KEY):
+                        export3mfAsOneFilePerTopOccurrence(tmpExportObjects, projectName, designName, configurationName, ao)
 
             # hide progress dialog
             if progressDialog.isShowing:

@@ -161,14 +161,9 @@ UI_FILENAME_ADD_PROJECT_NAME_NAME = 'Add Project Name'                          
 UI_FILENAME_ADD_DESIGN_NAME_NAME = 'Add Design Name'                   	                    # True if the name of the design should be added to the export name otherwise False
 UI_FILENAME_REMOVE_VERSION_TAGS_NAME = 'Remove Version Tags'                                # True if version tags should be removed otherwise False
 UI_FILENAME_ELEMENT_SEPERATOR_NAME = 'Element Separator'                                    # Character that separates e.g. project name, occurrence name and body name in an export name
-# True if the name of the current configuration should be added to the export name otherwise False
-UI_FILENAME_ADD_CONFIGURATION_NAME = 'Add Configuration Name'
-# True if the configuration list should loop through, generating a file for each config otherwise False
-UI_FILENAME_LOOP_CONFIGURATIONS = 'Loop Through Configurations'
-# True if version tags should be removed otherwise False
-UI_FILENAME_REMOVE_VERSION_TAGS_NAME = 'Remove Version Tags'
-# Character that separates e.g. project name, occurrence name and body name in an export name
-UI_FILENAME_ELEMENT_SEPERATOR_NAME = 'Element Separator'
+UI_FILENAME_ADD_CONFIGURATION_NAME = 'Add Configuration Name'                               # True if the name of the current configuration should be added to the export name otherwise False
+UI_FILENAME_REMOVE_VERSION_TAGS_NAME = 'Remove Version Tags'                                # True if version tags should be removed otherwise False
+UI_FILENAME_ELEMENT_SEPERATOR_NAME = 'Element Separator'                                    # Character that separates e.g. project name, occurrence name and body name in an export name
 UI_FILENAME_ELEMENT_SEPERATOR_VALUES = ['.', '-', '_']                                      # List of valid characters
 UI_FILENAME_OCCURRENCE_ID_SEPERATOR_NAME = 'Occurrence ID Separator'                        # Character that separates the occurrence name and the instance id
 UI_FILENAME_OCCURRENCE_ID_SEPERATOR_VALUES = ['.', '-', '_']                                # List of valid characters
@@ -286,8 +281,6 @@ CONF_FILENAME_USE_PART_NUMBER_DEFAULT = False                                   
 
 CONF_FILENAME_ADD_CONFIGURATION_NAME_KEY = 'addConfigurationNameToFilename'                 # True if the name of the current configuration should be added to the export name otherwise False
 CONF_FILENAME_ADD_CONFIGURATION_NAME_DEFAULT = False                                        # Valid values for the default: True, False
-CONF_FILENAME_LOOP_CONFIGURATIONS_KEY = 'loopConfigurationNames'                            # True if the configuration list should loop through, generating a file for each config otherwise False
-CONF_FILENAME_LOOP_CONFIGURATIONS_DEFAULT = False                                           # Valid values for the default: True, False
 
 # configuration - common
 CONF_SHOW_SUMMARY_FOR_KEY = 'showSummaryFor'                                                # Show export summary for infos, warnings or errors
